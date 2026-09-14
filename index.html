@@ -591,6 +591,7 @@
   function renderGhStatus(state){
     const el=document.getElementById("ghStatus");
     if(!ghToken){el.textContent="Not set up — paste a token below to back up to GitHub.";return;}
+    if(state==="expired"){el.textContent="⚠️ Token expired or invalid — create a new one on GitHub and paste it below. Your data is still safe on this phone.";return;}
     if(state==="error"){el.textContent="Sync error — will retry on next change or app open.";return;}
     if(state==="busy"){el.textContent="Syncing…";return;}
     el.textContent=lastSync?("Backing up to GitHub · last sync "+lastSync.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})):"Token saved — tap Sync now to run the first backup.";
@@ -646,8 +647,9 @@
       render();
       if(manual)showToast("Synced to GitHub");
     }catch(e){
-      renderGhStatus("error");
-      if(manual)showToast("Sync failed: "+e.message);
+      const msg=String(e&&e.message||"");
+      renderGhStatus((msg.includes("401")||msg.includes("403"))?"expired":"error");
+      if(manual)showToast("Sync failed: "+msg);
     }finally{ghBusy=false;}
   }
   function scheduleGhSync(){
