@@ -105,6 +105,8 @@
     padding:10px 0;font-size:13px;font-weight:600;color:var(--ink);}
   #bkText{width:100%;height:80px;border:1px solid var(--line);border-radius:8px;padding:8px;
     font-size:11px;font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--ink);resize:vertical;}
+  #ghToken{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;
+    font-size:13px;font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--ink);}
   .qa-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
   .qa-grid label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:4px;}
   .qa-grid input{border:1px solid var(--line);border-radius:8px;padding:9px 10px;font-size:16px;
@@ -204,6 +206,16 @@
     <div class="panel">
       <h2>Day by day</h2>
       <div id="histTable"><div class="empty">No days logged yet.</div></div>
+    </div>
+    <div class="panel">
+      <h2>GitHub backup</h2>
+      <div class="note" id="ghStatus" style="margin:0 0 8px"></div>
+      <input type="password" id="ghToken" placeholder="Paste GitHub token (github_pat_…)">
+      <div class="bk-row" style="margin-top:8px">
+        <button class="bk-btn" id="ghSave">Save token</button>
+        <button class="bk-btn" id="ghSync">Sync now</button>
+      </div>
+      <div class="note">The token stays on this device only. It syncs your data to data.json in the Call-log repo automatically about a minute after changes, and whenever you open the app.</div>
     </div>
     <div class="panel">
       <h2>Backup &amp; restore</h2>
@@ -367,7 +379,13 @@
     }catch(e){ /* nothing saved for today yet */ }
     if(found&&today===SEED_DATE&&fixOldSeed(data)){ save(); }
     if(!found&&today===SEED_DATE){ data=seed(); save(); }
+    try{
+      const t=await store.get(GH_TOKEN_KEY);
+      if(t)ghToken=t;
+    }catch(e){}
+    renderGhStatus();
     render();
+    if(ghToken)ghSyncNow(false);
   }
   function save(){
     if(!storageOK)return;
@@ -379,6 +397,7 @@
         index.push(today); index.sort();
         await store.set(INDEX_KEY,JSON.stringify(index));
       }
+      scheduleGhSync();
     },400);
   }
 
@@ -564,6 +583,79 @@
     if(changed>0){ save(); render(); showToast("Updated — negative numbers subtract"); }
   };
 
+  // ---------- GitHub sync ----------
+  const GH={owner:"doubledekr",repo:"Call-log",path:"data.json",branch:"main"};
+  const GH_TOKEN_KEY="calltrack_ghtoken";
+  let ghToken=null, ghTimer=null, ghBusy=false, lastSync=null;
+  function ghHeaders(){return {"Authorization":"Bearer "+ghToken,"Accept":"application/vnd.github+json"};}
+  function renderGhStatus(state){
+    const el=document.getElementById("ghStatus");
+    if(!ghToken){el.textContent="Not set up — paste a token below to back up to GitHub.";return;}
+    if(state==="error"){el.textContent="Sync error — will retry on next change or app open.";return;}
+    if(state==="busy"){el.textContent="Syncing…";return;}
+    el.textContent=lastSync?("Backing up to GitHub · last sync "+lastSync.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})):"Token saved — tap Sync now to run the first backup.";
+  }
+  async function ghPull(){
+    const r=await fetch("https://api.github.com/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path+"?ref="+GH.branch,{headers:ghHeaders()});
+    if(r.status===404)return{days:null,sha:null};
+    if(!r.ok)throw new Error("pull "+r.status);
+    const j=await r.json();
+    let days=null;
+    try{days=(JSON.parse(atob((j.content||"").split("\n").join("")))||{}).days||null;}catch(e){}
+    return{days:days,sha:j.sha};
+  }
+  function betterDay(a,b){
+    const ta=totals(a),tb=totals(b);
+    if(ta.dials!==tb.dials)return ta.dials>tb.dials?a:b;
+    if((a.folders||0)!==(b.folders||0))return (a.folders||0)>(b.folders||0)?a:b;
+    return a;
+  }
+  async function ghSyncNow(manual){
+    if(!ghToken){if(manual)showToast("Paste and save a GitHub token first");return;}
+    if(ghBusy)return;
+    ghBusy=true;renderGhStatus("busy");
+    try{
+      const remote=await ghPull();
+      const local={};
+      for(const k of index){
+        if(k===today){local[k]=data;continue;}
+        try{const v=await store.get(dayStoreKey(k));if(v)local[k]=JSON.parse(v);}catch(e){}
+      }
+      if(!(today in local)&&totals(data).dials>0)local[today]=data;
+      const merged={};
+      if(remote.days)for(const k of Object.keys(remote.days))merged[k]=remote.days[k];
+      for(const k of Object.keys(local))merged[k]=(k in merged)?betterDay(local[k],merged[k]):local[k];
+      // bring merged result back into local storage
+      for(const k of Object.keys(merged)){
+        const same=(k in local)&&JSON.stringify(local[k])===JSON.stringify(merged[k]);
+        if(!same)await store.set(dayStoreKey(k),JSON.stringify(merged[k]));
+        if(!index.includes(k))index.push(k);
+        if(k===today)data=Object.assign(blank(),merged[k]);
+      }
+      index.sort();
+      await store.set(INDEX_KEY,JSON.stringify(index));
+      // push merged up
+      const body={message:"Sync call data ("+today+")",
+        content:btoa(JSON.stringify({days:merged,updated:new Date().toISOString()})),branch:GH.branch};
+      if(remote.sha)body.sha=remote.sha;
+      const r=await fetch("https://api.github.com/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path,
+        {method:"PUT",headers:ghHeaders(),body:JSON.stringify(body)});
+      if(!r.ok)throw new Error("push "+r.status);
+      lastSync=new Date();
+      renderGhStatus();
+      render();
+      if(manual)showToast("Synced to GitHub");
+    }catch(e){
+      renderGhStatus("error");
+      if(manual)showToast("Sync failed: "+e.message);
+    }finally{ghBusy=false;}
+  }
+  function scheduleGhSync(){
+    if(!ghToken)return;
+    clearTimeout(ghTimer);
+    ghTimer=setTimeout(function(){ghSyncNow(false);},60000);
+  }
+
   // ---------- backup / restore ----------
   document.getElementById("bkExport").onclick=async()=>{
     const out={};
@@ -594,6 +686,17 @@
     render();
     showToast(n?("Restored "+n+" day"+(n>1?"s":"")):"No days found in that code");
   };
+
+  document.getElementById("ghSave").onclick=async()=>{
+    const v=document.getElementById("ghToken").value.trim();
+    if(!v){showToast("Paste a token first");return;}
+    ghToken=v;
+    document.getElementById("ghToken").value="";
+    await store.set(GH_TOKEN_KEY,v);
+    renderGhStatus();
+    ghSyncNow(true);
+  };
+  document.getElementById("ghSync").onclick=()=>ghSyncNow(true);
 
   // ---------- wire up ----------
   document.querySelectorAll(".btn").forEach(b=>{b.onclick=()=>log(b.dataset.o);});
