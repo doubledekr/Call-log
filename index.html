@@ -63,7 +63,7 @@
   .b-na{background:#5D6E82;}
   .b-ni{background:var(--red);}
   .b-int{background:var(--green);}
-  .b-fu{background:var(--amber);}
+  .btn.wide{grid-column:1/-1;}
 
   .row{display:flex;gap:8px;margin-bottom:12px;}
   .folderbox{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;
@@ -138,7 +138,7 @@
       <div class="stats">
         contact rate <b id="crate">–</b><br>
         interest rate <b id="irate">–</b><br>
-        warm <b id="warmN">0</b>
+        interested <b id="warmN">0</b>
       </div>
     </div>
 
@@ -147,8 +147,7 @@
     <div class="grid">
       <button class="btn b-na" data-o="na"><div class="k">No answer</div><div class="c" id="c-na">0</div></button>
       <button class="btn b-ni" data-o="ni"><div class="k">Not interested</div><div class="c" id="c-ni">0</div></button>
-      <button class="btn b-int" data-o="int"><div class="k">Interested</div><div class="c" id="c-int">0</div></button>
-      <button class="btn b-fu" data-o="fu"><div class="k">Follow-up</div><div class="c" id="c-fu">0</div></button>
+      <button class="btn b-int wide" data-o="int"><div class="k">Interested — follow-up set</div><div class="c" id="c-int">0</div></button>
     </div>
 
     <div class="row">
@@ -168,12 +167,12 @@
       <div id="qaBody" style="display:none">
         <div class="blocks" id="qaBlockRow" style="margin:8px 0 10px"></div>
         <div class="qa-grid">
-          <label>No answer<input type="number" id="qa-na" min="0" inputmode="numeric"></label>
-          <label>Not interested<input type="number" id="qa-ni" min="0" inputmode="numeric"></label>
-          <label>Interested<input type="number" id="qa-int" min="0" inputmode="numeric"></label>
-          <label>Follow-up<input type="number" id="qa-fu" min="0" inputmode="numeric"></label>
+          <label>No answer<input type="number" id="qa-na" inputmode="numeric"></label>
+          <label>Not interested<input type="number" id="qa-ni" inputmode="numeric"></label>
+          <label>Interested<input type="number" id="qa-int" inputmode="numeric"></label>
         </div>
         <button class="qa-add" id="qaAdd">Add to block</button>
+        <div class="note">Use negative numbers (like -2) to fix a miscount.</div>
       </div>
     </div>
 
@@ -227,7 +226,7 @@
     {id:"b3",label:"Block 3",time:"1:30–3:00",start:13*60+30,end:15*60},
     {id:"b4",label:"Block 4",time:"3:30–5:00",start:15*60+30,end:17*60}
   ];
-  const OUTCOMES=["na","ni","int","fu"];
+  const OUTCOMES=["na","ni","int"];
   const GOAL=15;
 
   let today=dayKey(new Date());
@@ -243,7 +242,7 @@
   }
   function blank(){
     const b={folders:0,blocks:{}};
-    BLOCKS.forEach(bl=>{b.blocks[bl.id]={na:0,ni:0,int:0,fu:0};});
+    BLOCKS.forEach(bl=>{b.blocks[bl.id]={na:0,ni:0,int:0};});
     return b;
   }
   function currentBlock(){
@@ -259,26 +258,44 @@
     return best;
   }
   function totals(d){
-    const t={na:0,ni:0,int:0,fu:0};
-    BLOCKS.forEach(bl=>{OUTCOMES.forEach(o=>{t[o]+=d.blocks[bl.id][o];});});
-    t.dials=t.na+t.ni+t.int+t.fu;
-    t.contacts=t.ni+t.int+t.fu;
-    t.warm=t.int+t.fu;
+    const t={na:0,ni:0,int:0};
+    BLOCKS.forEach(bl=>{
+      const b=d.blocks[bl.id]||{};
+      OUTCOMES.forEach(o=>{t[o]+=(b[o]||0);});
+      t.int+=(b.fu||0); // legacy: old data stored follow-ups separately
+    });
+    t.dials=t.na+t.ni+t.int;
+    t.contacts=t.ni+t.int;
     return t;
   }
   function pct(a,b){return b?Math.round(100*a/b)+"%":"–";}
 
   // ---------- storage ----------
   // One-time seed: Dave's morning totals for Sep 14, 2026 (117 dials through
-  // blocks 1 & 2: 84 no answer, 21 not interested, 7 interested, 5 follow-ups),
-  // split evenly across the two morning blocks. Only applies if that day
-  // has nothing saved yet, and never runs on any other date.
+  // blocks 1 & 2: 90 no answer, 21 not interested, 6 interested with
+  // follow-ups in motion), split evenly across the two morning blocks. Only
+  // applies if that day has nothing saved yet, and never runs on any other date.
   const SEED_DATE="2026-09-14";
   function seed(){
     const d=blank();
-    d.blocks.b1={na:42,ni:11,int:4,fu:3};
-    d.blocks.b2={na:42,ni:10,int:3,fu:2};
+    d.blocks.b1={na:45,ni:11,int:3};
+    d.blocks.b2={na:45,ni:10,int:3};
     return d;
+  }
+  // One-time fix: if the stored Sep 14 data is exactly the earlier seed
+  // (which double-counted follow-ups as separate from interested), replace
+  // those morning blocks with the corrected numbers. Any afternoon taps in
+  // blocks 3/4 are kept. Never touches hand-edited data.
+  function fixOldSeed(d){
+    const b1=d.blocks.b1||{},b2=d.blocks.b2||{};
+    const oldB1=b1.na===42&&b1.ni===11&&(b1.int||0)===4&&(b1.fu||0)===3;
+    const oldB2=b2.na===42&&b2.ni===10&&(b2.int||0)===3&&(b2.fu||0)===2;
+    if(oldB1&&oldB2){
+      d.blocks.b1={na:45,ni:11,int:3};
+      d.blocks.b2={na:45,ni:10,int:3};
+      return true;
+    }
+    return false;
   }
   let storageOK=false;
   function dayStoreKey(k){return "calltrack_"+k.split("-").join("");}
@@ -348,6 +365,7 @@
       const v=await store.get(dayStoreKey(today));
       if(v){ data=Object.assign(blank(),JSON.parse(v)); found=true; }
     }catch(e){ /* nothing saved for today yet */ }
+    if(found&&today===SEED_DATE&&fixOldSeed(data)){ save(); }
     if(!found&&today===SEED_DATE){ data=seed(); save(); }
     render();
   }
@@ -398,8 +416,8 @@
       new Date().toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
     document.getElementById("dialN").textContent=t.dials;
     document.getElementById("crate").textContent=pct(t.contacts,t.dials);
-    document.getElementById("irate").textContent=pct(t.warm,t.contacts);
-    document.getElementById("warmN").textContent=t.warm;
+    document.getElementById("irate").textContent=pct(t.int,t.contacts);
+    document.getElementById("warmN").textContent=t.int;
     OUTCOMES.forEach(o=>{document.getElementById("c-"+o).textContent=t[o];});
     document.getElementById("c-folders").textContent=data.folders;
     document.getElementById("undoBtn").disabled=undoStack.length===0;
@@ -421,8 +439,9 @@
     const bars=document.getElementById("todayBars");
     bars.innerHTML="";
     BLOCKS.forEach(bl=>{
-      const b=data.blocks[bl.id];
-      const dials=b.na+b.ni+b.int+b.fu, contacts=b.ni+b.int+b.fu;
+      const b=data.blocks[bl.id]||{};
+      const intAll=(b.int||0)+(b.fu||0);
+      const dials=(b.na||0)+(b.ni||0)+intAll, contacts=(b.ni||0)+intAll;
       const rate=dials?contacts/dials:0;
       bars.appendChild(barRow(bl.label,rate,contacts+"/"+dials+" · "+pct(contacts,dials)));
     });
@@ -481,9 +500,10 @@
     BLOCKS.forEach(bl=>{agg[bl.id]={dials:0,contacts:0};});
     days.forEach(({d})=>{
       BLOCKS.forEach(bl=>{
-        const b=d.blocks[bl.id]||{na:0,ni:0,int:0,fu:0};
-        agg[bl.id].dials+=b.na+b.ni+b.int+b.fu;
-        agg[bl.id].contacts+=b.ni+b.int+b.fu;
+        const b=d.blocks[bl.id]||{};
+        const intAll=(b.int||0)+(b.fu||0);
+        agg[bl.id].dials+=(b.na||0)+(b.ni||0)+intAll;
+        agg[bl.id].contacts+=(b.ni||0)+intAll;
       });
     });
     aggEl.innerHTML="";
@@ -492,12 +512,12 @@
       aggEl.appendChild(barRow(bl.label,a.dials?a.contacts/a.dials:0,a.contacts+"/"+a.dials+" · "+pct(a.contacts,a.dials)));
     });
     // table, newest first
-    let html='<table><tr><th>Day</th><th>Dials</th><th>Contact</th><th>Int</th><th>F/U</th><th>Fold</th></tr>';
+    let html='<table><tr><th>Day</th><th>Dials</th><th>Contact</th><th>Interested</th><th>Folders</th></tr>';
     days.slice().reverse().forEach(({k,d})=>{
       const t=totals(d);
       const dt=new Date(k+"T12:00:00");
       html+='<tr><td class="dt">'+dt.toLocaleDateString(undefined,{month:"short",day:"numeric"})+'</td>'+
-        '<td>'+t.dials+'</td><td>'+pct(t.contacts,t.dials)+'</td><td>'+t.int+'</td><td>'+t.fu+'</td><td>'+(d.folders||0)+'</td></tr>';
+        '<td>'+t.dials+'</td><td>'+pct(t.contacts,t.dials)+'</td><td>'+t.int+'</td><td>'+(d.folders||0)+'</td></tr>';
     });
     tableEl.innerHTML=html+'</table>';
   }
@@ -531,14 +551,17 @@
   };
   document.getElementById("qaAdd").onclick=()=>{
     rolloverCheck();
-    let added=0;
+    let changed=0;
     OUTCOMES.forEach(o=>{
       const el=document.getElementById("qa-"+o);
       const n=parseInt(el.value,10);
-      if(n>0){ data.blocks[qaBlock][o]+=n; added+=n; }
+      if(!isNaN(n)&&n!==0){
+        data.blocks[qaBlock][o]=Math.max(0,(data.blocks[qaBlock][o]||0)+n);
+        changed+=Math.abs(n);
+      }
       el.value="";
     });
-    if(added>0){ save(); render(); showToast("Added "+added+" calls"); }
+    if(changed>0){ save(); render(); showToast("Updated — negative numbers subtract"); }
   };
 
   // ---------- backup / restore ----------
