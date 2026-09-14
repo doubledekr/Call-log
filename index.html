@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Dial Log</title>
+<style>
+  :root{
+    --bg:#EDF0F4;
+    --ink:#182A40;
+    --panel:#FFFFFF;
+    --line:#D5DCE5;
+    --muted:#5D6E82;
+    --blue:#1F5FA8;
+    --green:#25714B;
+    --red:#A8402F;
+    --amber:#B07A1E;
+    --gold:#8A6410;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
+  button{font-family:inherit;color:inherit;background:none;border:none;cursor:pointer;}
+  html,body{height:100%;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);
+    font-feature-settings:"tnum";
+    padding:14px 14px 40px;
+    max-width:560px;margin:0 auto;
+  }
+  .top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;}
+  .top h1{font-size:17px;font-weight:700;letter-spacing:-0.01em;}
+  .top .date{font-size:13px;color:var(--muted);}
+  .tabs{display:flex;gap:6px;margin-bottom:14px;}
+  .tab{flex:1;padding:9px 0;text-align:center;font-size:14px;font-weight:600;
+    border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--muted);cursor:pointer;}
+  .tab.on{background:var(--ink);border-color:var(--ink);color:#fff;}
+  .savemode{font-size:11px;color:var(--muted);margin:-8px 0 10px;text-align:center;line-height:1.4;}
+  .savemode.warn{color:var(--red);font-weight:600;}
+
+  /* dial counter */
+  .counter{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:16px 18px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;}
+  .counter .n{font-size:52px;font-weight:800;line-height:1;letter-spacing:-0.03em;}
+  .counter .lbl{font-size:13px;color:var(--muted);margin-top:4px;}
+  .stats{text-align:right;font-size:13px;line-height:1.7;color:var(--muted);}
+  .stats b{color:var(--ink);font-weight:700;}
+
+  /* block chips */
+  .blocks{display:flex;gap:6px;margin-bottom:12px;}
+  .chip{flex:1;padding:8px 0;text-align:center;border:1px solid var(--line);border-radius:8px;
+    background:var(--panel);cursor:pointer;font-size:12px;line-height:1.35;color:var(--muted);}
+  .chip .t{display:block;font-weight:700;font-size:13px;color:var(--ink);}
+  .chip.on{border-color:var(--blue);background:#E8F0FA;}
+  .chip.on .t{color:var(--blue);}
+
+  /* outcome buttons */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+  .btn{border:none;border-radius:12px;padding:20px 8px 16px;text-align:center;cursor:pointer;
+    color:#fff;font-family:inherit;user-select:none;}
+  .btn:active{transform:scale(0.97);}
+  .btn .k{font-size:15px;font-weight:700;}
+  .btn .c{font-size:24px;font-weight:800;margin-top:4px;opacity:0.92;}
+  .b-na{background:#5D6E82;}
+  .b-ni{background:var(--red);}
+  .b-int{background:var(--green);}
+  .b-fu{background:var(--amber);}
+
+  .row{display:flex;gap:8px;margin-bottom:12px;}
+  .folderbox{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:10px 14px;display:flex;align-items:center;justify-content:space-between;}
+  .folderbox .k{font-size:14px;font-weight:700;color:var(--gold);}
+  .folderbox .ctrl{display:flex;align-items:center;gap:12px;}
+  .folderbox button{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);
+    background:var(--bg);font-size:20px;font-weight:700;color:var(--ink);cursor:pointer;font-family:inherit;}
+  .folderbox .fc{font-size:22px;font-weight:800;min-width:24px;text-align:center;}
+  .undo{width:96px;border:1px solid var(--line);border-radius:12px;background:var(--panel);
+    color:var(--muted);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;}
+  .undo:disabled{opacity:0.4;}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;}
+  .panel h2{font-size:13px;font-weight:700;margin-bottom:10px;color:var(--ink);}
+  .bars{display:flex;flex-direction:column;gap:8px;}
+  .bar{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted);}
+  .bar .bl{width:88px;flex-shrink:0;}
+  .bar .track{flex:1;height:16px;background:var(--bg);border-radius:5px;overflow:hidden;}
+  .bar .fill{height:100%;background:var(--blue);border-radius:5px;min-width:2px;}
+  .bar .v{width:74px;text-align:right;flex-shrink:0;font-weight:600;color:var(--ink);}
+
+  .pace{display:flex;justify-content:space-between;align-items:center;}
+  .pace .big{font-size:26px;font-weight:800;}
+  .pace .sub{font-size:12px;color:var(--muted);margin-top:2px;}
+  .pace .right{text-align:right;}
+
+  /* history */
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{font-size:11px;font-weight:700;color:var(--muted);text-align:right;padding:6px 4px;border-bottom:1px solid var(--line);}
+  th:first-child,td:first-child{text-align:left;}
+  td{padding:8px 4px;text-align:right;border-bottom:1px solid #EAEEF3;font-weight:600;}
+  td.dt{font-weight:600;color:var(--ink);}
+  .empty{color:var(--muted);font-size:14px;text-align:center;padding:24px 0;}
+  .note{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.5;}
+  .qa-toggle{display:block;width:100%;text-align:left;font-size:13px;font-weight:700;color:var(--ink);padding:2px 0;}
+  .bk-row{display:flex;gap:8px;margin-bottom:8px;}
+  .bk-btn{flex:1;border:1px solid var(--line);border-radius:8px;background:var(--bg);
+    padding:10px 0;font-size:13px;font-weight:600;color:var(--ink);}
+  #bkText{width:100%;height:80px;border:1px solid var(--line);border-radius:8px;padding:8px;
+    font-size:11px;font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--ink);resize:vertical;}
+  .qa-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
+  .qa-grid label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:4px;}
+  .qa-grid input{border:1px solid var(--line);border-radius:8px;padding:9px 10px;font-size:16px;
+    font-family:inherit;font-weight:600;color:var(--ink);width:100%;}
+  .qa-add{width:100%;border:none;border-radius:10px;padding:12px 0;background:var(--blue);
+    color:#fff;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;}
+  .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);
+    background:var(--ink);color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;
+    opacity:0;transition:opacity .2s;pointer-events:none;}
+  .toast.show{opacity:1;}
+</style>
+</head>
+<body>
+  <div class="top">
+    <h1>Dial Log</h1>
+    <div class="date" id="dateLbl"></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab on" id="tabToday">Today</button>
+    <button class="tab" id="tabHist">History</button>
+  </div>
+  <div class="savemode" id="saveMode"></div>
+
+  <div id="viewToday">
+    <div class="counter">
+      <div>
+        <div class="n" id="dialN">0</div>
+        <div class="lbl">dials today</div>
+      </div>
+      <div class="stats">
+        contact rate <b id="crate">–</b><br>
+        interest rate <b id="irate">–</b><br>
+        warm <b id="warmN">0</b>
+      </div>
+    </div>
+
+    <div class="blocks" id="blockRow"></div>
+
+    <div class="grid">
+      <button class="btn b-na" data-o="na"><div class="k">No answer</div><div class="c" id="c-na">0</div></button>
+      <button class="btn b-ni" data-o="ni"><div class="k">Not interested</div><div class="c" id="c-ni">0</div></button>
+      <button class="btn b-int" data-o="int"><div class="k">Interested</div><div class="c" id="c-int">0</div></button>
+      <button class="btn b-fu" data-o="fu"><div class="k">Follow-up</div><div class="c" id="c-fu">0</div></button>
+    </div>
+
+    <div class="row">
+      <div class="folderbox">
+        <div class="k">Folders</div>
+        <div class="ctrl">
+          <button id="fMinus">−</button>
+          <div class="fc" id="c-folders">0</div>
+          <button id="fPlus">+</button>
+        </div>
+      </div>
+      <button class="undo" id="undoBtn" disabled>Undo</button>
+    </div>
+
+    <div class="panel">
+      <button id="qaToggle" class="qa-toggle">Quick add past calls ▸</button>
+      <div id="qaBody" style="display:none">
+        <div class="blocks" id="qaBlockRow" style="margin:8px 0 10px"></div>
+        <div class="qa-grid">
+          <label>No answer<input type="number" id="qa-na" min="0" inputmode="numeric"></label>
+          <label>Not interested<input type="number" id="qa-ni" min="0" inputmode="numeric"></label>
+          <label>Interested<input type="number" id="qa-int" min="0" inputmode="numeric"></label>
+          <label>Follow-up<input type="number" id="qa-fu" min="0" inputmode="numeric"></label>
+        </div>
+        <button class="qa-add" id="qaAdd">Add to block</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Pickups by block — today</h2>
+      <div class="bars" id="todayBars"></div>
+    </div>
+
+    <div class="panel">
+      <div class="pace">
+        <div>
+          <div class="big" id="paceN">0 / 15</div>
+          <div class="sub">folders this month</div>
+        </div>
+        <div class="right">
+          <div class="big" id="paceNeed">–</div>
+          <div class="sub">needed per work day left</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="viewHist" style="display:none">
+    <div class="panel">
+      <h2>Contact rate by block — all days</h2>
+      <div class="bars" id="aggBars"></div>
+      <div class="note">This is the dead-zone finder. Blocks with low contact rates are where dials go to die — shift volume toward the strong ones.</div>
+    </div>
+    <div class="panel">
+      <h2>Day by day</h2>
+      <div id="histTable"><div class="empty">No days logged yet.</div></div>
+    </div>
+    <div class="panel">
+      <h2>Backup &amp; restore</h2>
+      <div class="bk-row">
+        <button class="bk-btn" id="bkExport">Show backup code</button>
+        <button class="bk-btn" id="bkImport">Restore from code</button>
+      </div>
+      <textarea id="bkText" placeholder="Backup code appears here. To restore, paste a code and tap Restore."></textarea>
+      <div class="note">Copy the backup code somewhere safe (notes app, email to yourself). Restoring merges it into whatever's here.</div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  const BLOCKS=[
+    {id:"b1",label:"Block 1",time:"9:00–10:30",start:9*60,end:10*60+30},
+    {id:"b2",label:"Block 2",time:"11:00–12:30",start:11*60,end:12*60+30},
+    {id:"b3",label:"Block 3",time:"1:30–3:00",start:13*60+30,end:15*60},
+    {id:"b4",label:"Block 4",time:"3:30–5:00",start:15*60+30,end:17*60}
+  ];
+  const OUTCOMES=["na","ni","int","fu"];
+  const GOAL=15;
+
+  let today=dayKey(new Date());
+  let data=blank();          // today's data
+  let index=[];              // list of day keys
+  let manualBlock=null;      // user-pinned block, else auto
+  let undoStack=[];
+  let saveTimer=null;
+
+  function dayKey(d){
+    const p=n=>String(n).padStart(2,"0");
+    return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate());
+  }
+  function blank(){
+    const b={folders:0,blocks:{}};
+    BLOCKS.forEach(bl=>{b.blocks[bl.id]={na:0,ni:0,int:0,fu:0};});
+    return b;
+  }
+  function currentBlock(){
+    if(manualBlock) return manualBlock;
+    const now=new Date(), m=now.getHours()*60+now.getMinutes();
+    for(const bl of BLOCKS){ if(m>=bl.start&&m<bl.end) return bl.id; }
+    // between blocks: attach to whichever block boundary is nearest
+    let best=BLOCKS[0].id,dist=1e9;
+    for(const bl of BLOCKS){
+      const d=Math.min(Math.abs(m-bl.start),Math.abs(m-bl.end));
+      if(d<dist){dist=d;best=bl.id;}
+    }
+    return best;
+  }
+  function totals(d){
+    const t={na:0,ni:0,int:0,fu:0};
+    BLOCKS.forEach(bl=>{OUTCOMES.forEach(o=>{t[o]+=d.blocks[bl.id][o];});});
+    t.dials=t.na+t.ni+t.int+t.fu;
+    t.contacts=t.ni+t.int+t.fu;
+    t.warm=t.int+t.fu;
+    return t;
+  }
+  function pct(a,b){return b?Math.round(100*a/b)+"%":"–";}
+
+  // ---------- storage ----------
+  // One-time seed: Dave's morning totals for Sep 14, 2026 (117 dials through
+  // blocks 1 & 2: 84 no answer, 21 not interested, 7 interested, 5 follow-ups),
+  // split evenly across the two morning blocks. Only applies if that day
+  // has nothing saved yet, and never runs on any other date.
+  const SEED_DATE="2026-09-14";
+  function seed(){
+    const d=blank();
+    d.blocks.b1={na:42,ni:11,int:4,fu:3};
+    d.blocks.b2={na:42,ni:10,int:3,fu:2};
+    return d;
+  }
+  let storageOK=false;
+  function dayStoreKey(k){return "calltrack_"+k.split("-").join("");}
+  const INDEX_KEY="calltrack_index";
+  function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+
+  // Storage adapter: tries artifact cloud storage, then the browser's own
+  // storage (for when this file is saved and opened locally), then memory.
+  const store={
+    mode:"memory", _m:{},
+    async init(){
+      // wait briefly for the artifact storage bridge, then verify it works
+      for(let i=0;i<8;i++){
+        if(window.storage&&typeof window.storage.set==="function")break;
+        await sleep(250);
+      }
+      if(window.storage&&typeof window.storage.set==="function"){
+        try{
+          const r=await window.storage.set("calltrack_ping","1",false);
+          if(r){this.mode="cloud";return;}
+        }catch(e){}
+      }
+      try{
+        window.localStorage.setItem("calltrack_ping","1");
+        this.mode="local";return;
+      }catch(e){}
+      this.mode="memory";
+    },
+    async get(k){
+      if(this.mode==="cloud"){
+        try{const r=await window.storage.get(k,false);return r?r.value:null;}catch(e){return null;}
+      }
+      if(this.mode==="local"){try{return window.localStorage.getItem(k);}catch(e){return null;}}
+      return (k in this._m)?this._m[k]:null;
+    },
+    async set(k,v){
+      if(this.mode==="cloud"){
+        for(let i=0;i<3;i++){
+          try{const r=await window.storage.set(k,v,false);if(r)return true;}catch(e){}
+          await sleep(400);
+        }
+        return false;
+      }
+      if(this.mode==="local"){try{window.localStorage.setItem(k,v);return true;}catch(e){return false;}}
+      this._m[k]=v;return true;
+    }
+  };
+
+  function renderSaveMode(){
+    const el=document.getElementById("saveMode");
+    if(store.mode==="cloud")el.textContent="Saving: Claude storage";
+    else if(store.mode==="local")el.textContent="Saving: on this device";
+    else el.textContent="Not saving — this session only. Save the file & open in your browser to keep history.";
+    el.className="savemode"+(store.mode==="memory"?" warn":"");
+  }
+
+  async function load(){
+    await store.init();
+    storageOK=true;
+    renderSaveMode();
+    try{
+      const v=await store.get(INDEX_KEY);
+      if(v) index=JSON.parse(v);
+    }catch(e){ index=[]; }
+    let found=false;
+    try{
+      const v=await store.get(dayStoreKey(today));
+      if(v){ data=Object.assign(blank(),JSON.parse(v)); found=true; }
+    }catch(e){ /* nothing saved for today yet */ }
+    if(!found&&today===SEED_DATE){ data=seed(); save(); }
+    render();
+  }
+  function save(){
+    if(!storageOK)return;
+    clearTimeout(saveTimer);
+    saveTimer=setTimeout(async()=>{
+      const ok=await store.set(dayStoreKey(today),JSON.stringify(data));
+      if(!ok){ showToast("Save failed — data kept in memory for now"); return; }
+      if(!index.includes(today)){
+        index.push(today); index.sort();
+        await store.set(INDEX_KEY,JSON.stringify(index));
+      }
+    },400);
+  }
+
+  // ---------- actions ----------
+  function log(outcome){
+    rolloverCheck();
+    const bl=currentBlock();
+    data.blocks[bl][outcome]++;
+    undoStack.push({type:"call",block:bl,outcome});
+    save(); render();
+  }
+  function folder(delta){
+    rolloverCheck();
+    if(delta<0&&data.folders===0)return;
+    data.folders+=delta;
+    if(delta>0)undoStack.push({type:"folder"});
+    save(); render();
+  }
+  function undo(){
+    const a=undoStack.pop();
+    if(!a)return;
+    if(a.type==="call"&&data.blocks[a.block][a.outcome]>0)data.blocks[a.block][a.outcome]--;
+    if(a.type==="folder"&&data.folders>0)data.folders--;
+    save(); render();
+  }
+  function rolloverCheck(){
+    const k=dayKey(new Date());
+    if(k!==today){ today=k; data=blank(); undoStack=[]; manualBlock=null; }
+  }
+
+  // ---------- render ----------
+  function render(){
+    const t=totals(data);
+    document.getElementById("dateLbl").textContent=
+      new Date().toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
+    document.getElementById("dialN").textContent=t.dials;
+    document.getElementById("crate").textContent=pct(t.contacts,t.dials);
+    document.getElementById("irate").textContent=pct(t.warm,t.contacts);
+    document.getElementById("warmN").textContent=t.warm;
+    OUTCOMES.forEach(o=>{document.getElementById("c-"+o).textContent=t[o];});
+    document.getElementById("c-folders").textContent=data.folders;
+    document.getElementById("undoBtn").disabled=undoStack.length===0;
+
+    // block chips
+    const cur=currentBlock();
+    const row=document.getElementById("blockRow");
+    row.innerHTML="";
+    BLOCKS.forEach(bl=>{
+      const div=document.createElement("button");
+      div.type="button";
+      div.className="chip"+(bl.id===cur?" on":"");
+      div.innerHTML='<span class="t">'+bl.label+'</span>'+bl.time;
+      div.onclick=()=>{ manualBlock=(manualBlock===bl.id)?null:bl.id; render(); };
+      row.appendChild(div);
+    });
+
+    // today per-block bars
+    const bars=document.getElementById("todayBars");
+    bars.innerHTML="";
+    BLOCKS.forEach(bl=>{
+      const b=data.blocks[bl.id];
+      const dials=b.na+b.ni+b.int+b.fu, contacts=b.ni+b.int+b.fu;
+      const rate=dials?contacts/dials:0;
+      bars.appendChild(barRow(bl.label,rate,contacts+"/"+dials+" · "+pct(contacts,dials)));
+    });
+
+    // pace is computed in renderHistory (month-wide folder sum)
+    renderHistory();
+  }
+
+  function renderPace(monthFolders){
+    document.getElementById("paceN").textContent=monthFolders+" / "+GOAL;
+    const now=new Date();
+    const lastDay=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+    let wd=0;
+    for(let d=now.getDate();d<=lastDay;d++){
+      const dow=new Date(now.getFullYear(),now.getMonth(),d).getDay();
+      if(dow!==0&&dow!==6)wd++;
+    }
+    const rem=Math.max(0,GOAL-monthFolders);
+    document.getElementById("paceNeed").textContent=wd?(rem/wd).toFixed(1):"–";
+  }
+
+  function barRow(label,frac,valueText){
+    const div=document.createElement("div");
+    div.className="bar";
+    div.innerHTML='<div class="bl">'+label+'</div>'+
+      '<div class="track"><div class="fill" style="width:'+Math.round(frac*100)+'%"></div></div>'+
+      '<div class="v">'+valueText+'</div>';
+    return div;
+  }
+
+  async function renderHistory(){
+    const tableEl=document.getElementById("histTable");
+    const aggEl=document.getElementById("aggBars");
+    if(index.length===0){
+      renderPace(data.folders);
+      tableEl.innerHTML='<div class="empty">No days logged yet.</div>';
+      aggEl.innerHTML='<div class="empty">Data appears after your first logged day.</div>';
+      return;
+    }
+    const days=[];
+    for(const k of index.slice(-31)){
+      if(k===today){days.push({k,d:data});continue;}
+      try{
+        const v=await store.get(dayStoreKey(k));
+        if(v)days.push({k,d:JSON.parse(v)});
+      }catch(e){}
+    }
+    if(!days.some(x=>x.k===today))days.push({k:today,d:data});
+    // month-wide folder sum for pace
+    const monthPrefix=today.slice(0,7);
+    let monthFolders=0;
+    days.forEach(({k,d})=>{ if(k.slice(0,7)===monthPrefix) monthFolders+=(d.folders||0); });
+    renderPace(monthFolders);
+    // aggregate per block
+    const agg={};
+    BLOCKS.forEach(bl=>{agg[bl.id]={dials:0,contacts:0};});
+    days.forEach(({d})=>{
+      BLOCKS.forEach(bl=>{
+        const b=d.blocks[bl.id]||{na:0,ni:0,int:0,fu:0};
+        agg[bl.id].dials+=b.na+b.ni+b.int+b.fu;
+        agg[bl.id].contacts+=b.ni+b.int+b.fu;
+      });
+    });
+    aggEl.innerHTML="";
+    BLOCKS.forEach(bl=>{
+      const a=agg[bl.id];
+      aggEl.appendChild(barRow(bl.label,a.dials?a.contacts/a.dials:0,a.contacts+"/"+a.dials+" · "+pct(a.contacts,a.dials)));
+    });
+    // table, newest first
+    let html='<table><tr><th>Day</th><th>Dials</th><th>Contact</th><th>Int</th><th>F/U</th><th>Fold</th></tr>';
+    days.slice().reverse().forEach(({k,d})=>{
+      const t=totals(d);
+      const dt=new Date(k+"T12:00:00");
+      html+='<tr><td class="dt">'+dt.toLocaleDateString(undefined,{month:"short",day:"numeric"})+'</td>'+
+        '<td>'+t.dials+'</td><td>'+pct(t.contacts,t.dials)+'</td><td>'+t.int+'</td><td>'+t.fu+'</td><td>'+(d.folders||0)+'</td></tr>';
+    });
+    tableEl.innerHTML=html+'</table>';
+  }
+
+  function showToast(msg){
+    const el=document.getElementById("toast");
+    el.textContent=msg;el.classList.add("show");
+    setTimeout(()=>el.classList.remove("show"),1800);
+  }
+
+  // ---------- quick add ----------
+  let qaBlock="b1";
+  function renderQaBlocks(){
+    const row=document.getElementById("qaBlockRow");
+    row.innerHTML="";
+    BLOCKS.forEach(bl=>{
+      const div=document.createElement("button");
+      div.type="button";
+      div.className="chip"+(bl.id===qaBlock?" on":"");
+      div.innerHTML='<span class="t">'+bl.label+'</span>'+bl.time;
+      div.onclick=()=>{qaBlock=bl.id;renderQaBlocks();};
+      row.appendChild(div);
+    });
+  }
+  document.getElementById("qaToggle").onclick=()=>{
+    const body=document.getElementById("qaBody");
+    const open=body.style.display==="none";
+    body.style.display=open?"":"none";
+    document.getElementById("qaToggle").textContent=open?"Quick add past calls ▾":"Quick add past calls ▸";
+    if(open)renderQaBlocks();
+  };
+  document.getElementById("qaAdd").onclick=()=>{
+    rolloverCheck();
+    let added=0;
+    OUTCOMES.forEach(o=>{
+      const el=document.getElementById("qa-"+o);
+      const n=parseInt(el.value,10);
+      if(n>0){ data.blocks[qaBlock][o]+=n; added+=n; }
+      el.value="";
+    });
+    if(added>0){ save(); render(); showToast("Added "+added+" calls"); }
+  };
+
+  // ---------- backup / restore ----------
+  document.getElementById("bkExport").onclick=async()=>{
+    const out={};
+    for(const k of index){
+      if(k===today){out[k]=data;continue;}
+      try{const v=await store.get(dayStoreKey(k));if(v)out[k]=JSON.parse(v);}catch(e){}
+    }
+    if(!(today in out)&&totals(data).dials>0)out[today]=data;
+    const el=document.getElementById("bkText");
+    el.value=JSON.stringify(out);
+    el.focus();el.select();
+    showToast("Backup code ready — copy it somewhere safe");
+  };
+  document.getElementById("bkImport").onclick=async()=>{
+    const el=document.getElementById("bkText");
+    let obj;
+    try{obj=JSON.parse(el.value);}catch(e){showToast("That code isn't valid — paste the whole thing");return;}
+    let n=0;
+    for(const k of Object.keys(obj)){
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(k)||!obj[k]||!obj[k].blocks)continue;
+      await store.set(dayStoreKey(k),JSON.stringify(obj[k]));
+      if(!index.includes(k))index.push(k);
+      if(k===today)data=Object.assign(blank(),obj[k]);
+      n++;
+    }
+    index.sort();
+    await store.set(INDEX_KEY,JSON.stringify(index));
+    render();
+    showToast(n?("Restored "+n+" day"+(n>1?"s":"")):"No days found in that code");
+  };
+
+  // ---------- wire up ----------
+  document.querySelectorAll(".btn").forEach(b=>{b.onclick=()=>log(b.dataset.o);});
+  document.getElementById("fPlus").onclick=()=>folder(1);
+  document.getElementById("fMinus").onclick=()=>folder(-1);
+  document.getElementById("undoBtn").onclick=undo;
+  document.getElementById("tabToday").onclick=()=>switchTab(true);
+  document.getElementById("tabHist").onclick=()=>switchTab(false);
+  function switchTab(todayView){
+    document.getElementById("viewToday").style.display=todayView?"":"none";
+    document.getElementById("viewHist").style.display=todayView?"none":"";
+    document.getElementById("tabToday").classList.toggle("on",todayView);
+    document.getElementById("tabHist").classList.toggle("on",!todayView);
+    if(!todayView)renderHistory();
+  }
+
+  load();
+})();
+</script>
+</body>
+</html>
